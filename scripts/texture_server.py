@@ -216,114 +216,90 @@ class ScanController:
                 self.status.progress = prog
 
         try:
-            # 0) Button LED ON while scanning
+            # ---- EVERYTHING THAT CAN FAIL GOES HERE ----
+
             self._set_button_led(True)
 
-            # 1) Arm: ring on (white), wait for gates
             self._ring_set((255, 255, 255), brightness=MAX_BRIGHTNESS)
-            update("ARMING", "Waiting for cloth + stable texture signal...", 0.10)
-
-            # TODO: implement camera gate + audio gate
-            # For now: short warmup delay
+            update("ARMING", "Preparing scan...", 0.10)
             time.sleep(0.8)
 
-# 2) CAPTURE 3s window: audio record + timed ring colors + snapshots
-update("CAPTURING", "Capturing 3s window...", 0.25)
+            # ===============================
+            # CAPTURE BLOCK (YOUR ERROR LINE)
+            # ===============================
+            update("CAPTURING", "Capturing 3s window...", 0.25)
 
-audio_raw = os.path.join(scan_dir, "audio_raw.wav")
-audio_nodc = os.path.join(scan_dir, "audio_nodc.wav")
-spec_png = os.path.join(scan_dir, "audio_nodc.png")
+            audio_raw = os.path.join(scan_dir, "audio_raw.wav")
+            audio_nodc = os.path.join(scan_dir, "audio_nodc.wav")
+            spec_png = os.path.join(scan_dir, "audio_nodc.png")
 
-# Start capture timestamp
-t0 = time.time()
+            t0 = time.time()
 
-# (A) Kick ring-light schedule + snapshots in a small thread
-def light_and_snapshots():
-    schedule = [
-        (0.0, (255, 120, 30), "dawn"),
-        (1.0, (255, 255, 255), "noon"),
-        (2.0, (80, 120, 255), "dusk"),
-    ]
-    for offset, rgb, name in schedule:
-        while time.time() - t0 < offset:
-            time.sleep(0.005)
-        self._ring_set(rgb, brightness=MAX_BRIGHTNESS)
+            def light_and_snapshots():
+                schedule = [
+                    (0.0, (255, 120, 30), "dawn"),
+                    (1.0, (255, 255, 255), "noon"),
+                    (2.0, (80, 120, 255), "dusk"),
+                ]
+                for offset, rgb, name in schedule:
+                    while time.time() - t0 < offset:
+                        time.sleep(0.005)
+                    self._ring_set(rgb, brightness=MAX_BRIGHTNESS)
+                    # camera capture later
 
-        img_path = os.path.join(scan_dir, f"{name}.jpg")
-        # TODO: uncomment when Picamera2 is wired:
-        # self.cam.capture_file(img_path)
+            lt = threading.Thread(target=light_and_snapshots, daemon=True)
+            lt.start()
 
-lt = threading.Thread(target=light_and_snapshots, daemon=True)
-lt.start()
+            arecord_log = record_audio_wav(audio_raw, duration_s=3)
+            lt.join(timeout=5)
 
-# (B) Record exactly 3 seconds of WAV
-arecord_log = record_audio_wav(audio_raw, duration_s=3)
+            update("PROCESSING", "Processing audio...", 0.75)
 
-# Wait for light/snapshot thread to finish
-lt.join(timeout=5)
+            sox_dc_log = sox_remove_dc(audio_raw, audio_nodc)
+            raw_stats = sox_stat(audio_raw)
+            nodc_stats = sox_stat(audio_nodc)
 
-update("PROCESSING", "DC removal + stats + spectrogram...", 0.75)
+            try:
+                sox_spectrogram(audio_nodc, spec_png)
+                spec_ok = True
+            except Exception:
+                spec_ok = False
 
-# (C) Remove DC bias (and slight gain reduction)
-sox_dc_log = sox_remove_dc(audio_raw, audio_nodc)
+            with open(os.path.join(scan_dir, "results.json"), "w") as f:
+                json.dump({
+                    "scan_id": scan_id,
+                    "audio": {
+                        "raw": "audio_raw.wav",
+                        "nodc": "audio_nodc.wav",
+                        "stats_raw": raw_stats,
+                        "stats_nodc": nodc_stats,
+                    }
+                }, f, indent=2)
 
-# (D) Stats (sanity)
-raw_stats = sox_stat(audio_raw)
-nodc_stats = sox_stat(audio_nodc)
-
-# (E) Optional spectrogram
-try:
-    sox_spectrogram(audio_nodc, spec_png)
-    spec_ok = True
-except Exception as e:
-    spec_ok = False
-
-results = {
-    "scan_id": scan_id,
-    "t0": t0,
-    "audio": {
-        "device": AUDIO_DEV,
-        "rate": AUDIO_RATE,
-        "format": AUDIO_FORMAT,
-        "channels": AUDIO_CHANNELS,
-        "raw_wav": os.path.basename(audio_raw),
-        "nodc_wav": os.path.basename(audio_nodc),
-        "spectrogram_png": os.path.basename(spec_png) if spec_ok else None,
-        "arecord_log": arecord_log,
-        "sox_dc_log": sox_dc_log,
-        "stats_raw": raw_stats,
-        "stats_nodc": nodc_stats,
-    },
-    "images": {
-        "dawn": "dawn.jpg",
-        "noon": "noon.jpg",
-        "dusk": "dusk.jpg",
-    }
-}
-
-with open(os.path.join(scan_dir, "results.json"), "w", encoding="utf-8") as f:
-    json.dump(results, f, indent=2)
-
-update("DONE", "Scan complete", 1.0)
+            update("DONE", "Scan complete", 1.0)
 
         except Exception as e:
-            update("ERROR", f"{e}", 1.0)
-            print("Scan error:", e)
+            # ---- ANY FAILURE ENDS UP HERE ----
+            update("ERROR", str(e), 1.0)
+            print("Scan failed:", e)
 
         finally:
+            # ---- ALWAYS CLEAN UP ----
             self._ring_off()
             self._set_button_led(False)
+            self._busy.clear()
+
             with self._lock:
-                # keep last scan_id, but mark IDLE after DONE/ERROR
                 last_id = self.status.scan_id
                 last_msg = self.status.message
-            time.sleep(0.3)
+
+            time.sleep(0.2)
+
             with self._lock:
                 self.status.state = "IDLE"
                 self.status.scan_id = last_id
                 self.status.message = last_msg
                 self.status.progress = 0.0
-            self._busy.clear()
 
 
 controller = ScanController()
