@@ -1,2 +1,6 @@
 scans/
 **__pycache__**
+
+# Environment and configuration files
+.env
+.vscode/settings.json
