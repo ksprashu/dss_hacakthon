@@ -593,7 +593,7 @@ class ScanController:
                 },
             }
 
-            with open(os.path.join(scan_dir, "results.json"), "w", encoding="utf-8") as f:
+            with open(os.path.join(scan_dir, "texture_results.json"), "w", encoding="utf-8") as f:
                 json.dump(results, f, indent=2)
 
             update("DONE", "Scan complete", 1.0)
