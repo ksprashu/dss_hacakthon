@@ -57,7 +57,7 @@ NOISE     = 16
 
 # NeoPixel ring
 NUM_PIXELS = 24
-MAX_BRIGHTNESS = 0.1
+MAX_BRIGHTNESS = 0.2
 
 # Storage
 SCAN_ROOT = "./scans"
