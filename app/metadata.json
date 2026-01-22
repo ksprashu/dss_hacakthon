@@ -1,0 +1,7 @@
+{
+  "name": "MaterialLab Showcase",
+  "description": "A premium product showcase application featuring deep material analysis and AI-driven textile insights.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
