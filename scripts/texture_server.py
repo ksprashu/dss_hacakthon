@@ -475,17 +475,50 @@ class ScanController:
 
             # Warm daylight, neutral, cool
             schedule = [
-                ((255, 140, 60), "warm.jpg", "warm"),
-                ((255, 255, 255), "neutral.jpg", "neutral"),
-                ((120, 160, 255), "cool.jpg", "cool"),
+                ((255, 140, 60), "warm"),
+                ((255, 255, 255), "neutral"),
+                ((120, 160, 255), "cool"),
             ]
 
-            self.lcd_step("Taking photos", "warm/neutral/cool")
-            for rgb, filename, name in schedule:
+            # --- LONG SHOTS ---
+            self.lcd_step("Long shots", "warm/neutral/cool")
+            log.info("Starting LONG shots")
+
+            for rgb, name in schedule:
                 log.info("Ring -> %s (%s)", name, rgb)
                 self._ring_set(rgb, brightness=MAX_BRIGHTNESS)
 
-                self.lcd_step("Photo", name)  # name is warm/neutral/cool
+                self.lcd_step("Long Shot", name)
+                filename = f"long_{name}.jpg"
+                img_path = os.path.join(scan_dir, filename)
+                md, lock = capture_locked(self.cam, img_path)
+
+                # Optional: save metadata to debug exposure/focus
+                try:
+                    with open(img_path.replace(".jpg", ".meta.json"), "w") as f:
+                        json.dump(json_safe({"metadata": md, "lock": lock}), f, indent=2)
+                except Exception as e:
+                    log.warning("Failed to write metadata JSON: %s", e)
+
+                time.sleep(0.2)  # small gap
+
+            # --- WAIT 3s FOR MACRO ---
+            log.info("Waiting 3 seconds for macro positioning...")
+            self.buzzer.triple()  # Alert user to move
+            for i in range(3, 0, -1):
+                self.lcd_step("Pos. Macro", f"starting in {i}")
+                time.sleep(1.0)
+
+            # --- MACRO SHOTS ---
+            self.lcd_step("Macro shots", "warm/neutral/cool")
+            log.info("Starting MACRO shots")
+
+            for rgb, name in schedule:
+                log.info("Ring -> %s (%s)", name, rgb)
+                self._ring_set(rgb, brightness=MAX_BRIGHTNESS)
+
+                self.lcd_step("Macro Shot", name)
+                filename = f"macro_{name}.jpg"
                 img_path = os.path.join(scan_dir, filename)
                 md, lock = capture_locked(self.cam, img_path)
 
@@ -587,9 +620,12 @@ class ScanController:
                     "stats_norm": norm_stats,
                 },
                 "images": {
-                    "warm": "warm.jpg",
-                    "neutral": "neutral.jpg",
-                    "cool": "cool.jpg",
+                    "long_warm": "long_warm.jpg",
+                    "long_neutral": "long_neutral.jpg",
+                    "long_cool": "long_cool.jpg",
+                    "macro_warm": "macro_warm.jpg",
+                    "macro_neutral": "macro_neutral.jpg",
+                    "macro_cool": "macro_cool.jpg",
                 },
             }
 
