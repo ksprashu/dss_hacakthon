@@ -3,8 +3,12 @@ import os
 from typing import Dict
 
 import requests
+from dotenv import load_dotenv
 
-BASE_URL = "https://wardrobe-uxu5wi2jpa-uc.a.run.app"
+load_dotenv()
+
+# API Configuration
+BASE_URL = os.getenv("INGEST_API_BASE_URL", "http://localhost:5000")
 
 def ingest_to_hardware_api(
     image_path: str,
