@@ -209,7 +209,7 @@ def init_camera():
     # Still config (tune size as you like)
     cfg = cam.create_still_configuration(
         main={"size": (1920, 1080)},
-        transform=Transform(rotation=180),  # <-- rotate once, globally
+        # transform=Transform(rotation=180),  # <-- rotate once, globally
         controls={
             "AeEnable": True,
             "AwbEnable": True,
