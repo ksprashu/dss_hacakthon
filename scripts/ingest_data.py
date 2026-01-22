@@ -65,5 +65,5 @@ def ingest_to_hardware_api(
         return False
 
 if __name__ == "__main__":
-    ingest_to_hardware_api("/home/pipipi/code/dss_hacakthon/scans/20260122-192049-631f0791/generated_product.png", {"roughness": 0.3, "stiffness": 0.5})
+    ingest_to_hardware_api("/home/pipipi/code/dss_hacakthon/scans/20260122-200309-f9046b28/generated_product.png", {"roughness": 0.3, "stiffness": 0.15})
 
